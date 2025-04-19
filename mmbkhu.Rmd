@@ -1,0 +1,342 @@
+title: "Supervised learning Assignment 1"
+author: "Khuliso Mmbi MMBKHU001"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Data Analysis
+```{r eval = T}
+
+#Creating a unique sub-sample of 200 observations
+library(dplyr)
+library(readxl)
+tipdata <- read.csv("tipdata.csv")
+
+rm(list=ls())
+
+#setwd("directory where data file is saved")
+fulldata <- read.csv("tipdata.csv") #Read in all 244 observations
+
+set.seed(32) 
+my_data <- fulldata[sample(1:nrow(fulldata), 200, replace=FALSE), ]
+
+write.csv(my_data, 'my_tipdata.csv', row.names = FALSE)
+
+my_data <- my_data %>%
+  select(total_bill, tip, sex, smoker, day, time, size)
+
+
+#Checking data types, missing values, and data distribution
+
+#structure of the data
+str(my_data)
+
+# Checking for missing values
+colSums(is.na(my_data))
+any(is.na(my_data))
+
+# Summary statistics for numerical variables
+summary(my_data)
+summary(my_data$tip)
+summary(my_data$total_bill)
+table(my_data$size)
+
+# Categorical Variables frequency tables
+table(my_data$sex)
+table(my_data$smoker)
+table(my_data$time)
+table(my_data$day)
+
+
+#Date Visualisation
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+
+# Scatter plot of tip amount and total bill
+ggplot(my_data, aes(x = total_bill, y = tip)) +
+  geom_point(fill = "lightgreen") +
+  labs(title = "Tip amount andTotal Bill",
+       x = "Total Bill ",
+       y = "Tip Amount ($)") +
+  theme_minimal()
+
+
+# Scatter plot of tip amount and size of the party
+ggplot(my_data, aes(x = size, y = tip)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  labs(title = "Tip Amount and Size of Party",
+       x = "Size of Party",
+       y = "Tip Amount ($)") +
+  theme_minimal()
+
+
+# Box plots of tip amount and Sex of the bill payer and smoker/non smoker status of the bill payer
+ggplot(my_data, aes(x = sex, y = tip, fill = smoker)) +
+  geom_boxplot() +
+  labs(title = "Tip Amount by Sex and Smoker Status",
+       x = "Sex of Bill Payer",
+       y = "Tip Amount ($)",
+       fill = "Smoker Status") +
+  scale_fill_manual(values = c("Yes" = "lightgreen", "No" = "lightblue")) +
+  theme_minimal()
+
+
+
+ggplot(my_data, aes(x = day, y = tip)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(title = "Tip Amount by Day of the Week",
+       x = "Day of the Week",
+       y = "Tip Amount ($)") +
+  theme_minimal()
+
+
+ggplot(my_data, aes(x = time, y = tip)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(title = "Tip Amount by Time of Day",
+       x = "Time of Day",
+       y = "Tip Amount ($)") +
+  theme_minimal()
+
+
+# Histogram of tip amount
+ggplot(my_data, aes(x = tip)) +
+  geom_histogram(binwidth = 1, fill = "lightgreen", color = "black") +
+  labs(title = "Distribution of Tip Amount",
+       x = "Tip Amount ($)",
+       y = "Frequency") +
+  theme_minimal()
+
+
+# Histogram of total bill amount
+ggplot(my_data, aes(x = total_bill)) +
+  geom_histogram(binwidth = 5, fill = "lightgreen", color = "black") +
+  labs(title = "Distribution of Total Bill Amount",
+       x = "Total Bill ($)",
+       y = "Frequency") +
+  theme_minimal()
+
+
+# Histogram of size of the party
+ggplot(my_data, aes(x = size)) +
+  geom_histogram(binwidth = 1, fill = "lightgreen", color = "black") +
+  labs(title = "Distribution of Party Size",
+       x = "Party Size",
+       y = "Frequency") +
+  theme_minimal()
+
+```
+
+
+# Model fitting
+```{r}
+#Splitting the data
+
+test_set <- 0.3
+training_seet <- 0.7
+
+
+library(caret)
+set.seed(123)
+
+# Split the data into training and testing sets
+sample <- sample(c(TRUE, FALSE), nrow(my_data), replace=TRUE, prob=c(0.7,0.3))
+train_data  <- my_data[sample, ]
+test_data   <- my_data[!sample, ]
+
+# model fitting
+full_model <- lm(tip ~ ., data = train_data)
+summary(full_model)
+
+summary(full_model)
+mean(my_data$tip)
+
+coefficients <- coef(full_model)
+p_values <- summary(full_model)$coefficients[, 4]
+
+
+#MSE Calculation
+
+#a
+predicted <- predict(full_model, newdata = test_data)
+summary(predicted)
+
+#b
+actual <- test_data$tip
+mse <- mean((actual - predicted)^2)
+print(paste("Test Mean Squared Error (MSE):", mse))
+
+```
+
+#3 Model Improvement
+```{r}
+
+full_model <- lm(tip ~ ., data = train_data)
+full_model
+
+#Backwards Stepwise regression
+step_model <- step(full_model, direction = "backward")
+summary(full_model)
+
+
+# Subset selection based on AIC
+aic_model <- step(full_model, direction = "backward", k = 2)
+summary(aic_model)
+
+# Subset selection based on BIC
+bic_model <- step(full_model, direction = "backward", k = log(nrow(train_data)))
+summary(bic_model)
+
+#RIDGE regression model
+library(glmnet)
+ridge_model <- glmnet(x = model.matrix(~ ., data = train_data)[, -1],
+                       y = train_data$tip,
+                       alpha = 0, lambda = 0.2)
+best_lambda <- ridge_model$lambda
+
+# Predict using the RIDGE model
+predicted_ridge <- predict(ridge_model, s = best_lambda, newx = model.matrix(~ ., data = test_data)[, -1])
+
+
+#LASSO
+# Fit the LASSO regression model
+lasso_model <- glmnet(x = model.matrix(~ ., data = train_data)[, -1],
+                       y = train_data$tip,
+                       alpha = 1, lambda = 0.2)
+best_lambda <- lasso_model$lambda
+
+
+# Predict using the LASSO model
+predicted_lasso <- predict(lasso_model, s = best_lambda, newx = model.matrix(~ ., data = test_data)[, -1])
+predicted_lasso
+
+predicted_full <- predict(full_model, newdata = test_data)
+predicted_step <- predict(step_model, newdata = test_data)
+
+
+#MSE for each model
+mse_full <- mean((test_data$tip - predicted_full)^2)
+mse_step <- mean((test_data$tip - predicted_step)^2)
+mse_ridge <- mean((test_data$tip - predicted_ridge)^2)
+mse_lasso <- mean((test_data$tip - predicted_lasso)^2)
+
+# MSE
+print(paste("MSE for Full Model:", mse_full))
+print(paste("MSE for Stepwise Model:", mse_step))
+print(paste("MSE for RIDGE Model:", mse_ridge))
+print(paste("MSE for LASSO Model:", mse_lasso))
+
+
+full_model_interaction <- lm(tip ~ . + total_bill * smoker, data = train_data)
+
+
+predicted_interaction <- predict(full_model_interaction, newdata = test_data)
+mse_interaction <- mean((test_data$tip - predicted_interaction)^2)
+print(paste("MSE for Model with Interaction Term:", mse_interaction))
+
+summary(full_model_interaction)
+
+
+```
+
+
+#Interaction term selection 
+```{r}
+# Model fitting with interaction terms for each predictor variable
+full_model_interaction_sex <- lm(tip ~ . + total_bill * sex, data = train_data)
+summary(full_model_interaction_sex)
+
+full_model_interaction_smoker <- lm(tip ~ . + total_bill * smoker, data = train_data)
+summary(full_model_interaction_smoker)
+
+full_model_interaction_day <- lm(tip ~ . + total_bill * day, data = train_data)
+summary(full_model_interaction_day)
+
+full_model_interaction_time <- lm(tip ~ . + total_bill * time, data = train_data)
+summary(full_model_interaction_time)
+
+full_model_interaction_size <- lm(tip ~ . + total_bill * size, data = train_data)
+summary(full_model_interaction_size)
+
+```
+
+
+
+#Residuals diagnostics
+```{r}
+library(ggplot2)
+
+# Residual diagnostics
+residuals <- residuals(full_model)
+fitted_values <- predict(full_model)
+
+# Create a data frame for plotting
+residual_df <- data.frame(Fitted_Values = fitted_values, Residuals = residuals)
+
+
+# Linearity: Residuals vs Fitted values plot
+plot_linearity <- ggplot(residual_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point(color = "green", alpha = 0.6) +
+  labs(x = "Fitted Values", y = "Residuals", title = "Residuals vs Fitted Values") +
+  theme_minimal()
+
+# Homoscedasticity: Residuals vs Fitted values plot with adjusted y-axis limits
+plot_homoscedasticity <- ggplot(residual_df, aes(x = Fitted_Values, y = Residuals)) +
+  geom_point(color = "green", alpha = 0.6) +
+  labs(x = "Fitted Values", y = "Residuals", title = "Residuals vs Fitted Values") +
+  ylim(min(residuals) - 1, max(residuals) + 1) +  # Adjusted y-axis limits
+  theme_minimal()
+
+par(mfrow = c(1, 2))
+# Normality: Histogram of Residuals
+plot_histogram <- ggplot(residual_df, aes(x = Residuals)) +
+  geom_histogram(fill = "lightgreen", color = "black", bins = 20) +
+  labs(x = "Residuals", y = "Frequency", title = "Histogram of Residuals") +
+  theme_minimal()
+
+# Normality: Q-Q plot of Residuals
+plot_qq <- ggplot(residual_df, aes(sample = Residuals)) +
+  stat_qq() +
+  labs(title = "Normal Q-Q Plot of Residuals") +
+  theme_minimal()
+
+# Display plots
+
+plot_linearity
+plot_homoscedasticity
+plot_histogram
+plot_qq
+
+
+# QQ plot of residuals
+
+qqnorm(residuals)
+
+qqline(residuals)
+
+plot(full_model_interaction, which = 3)
+ 
+plot(full_model_interaction, which = 5)
+
+# Plot residuals vs. fitted values
+residuals <- resid(full_model_interaction)
+fitted_values <- fitted(full_model_interaction)
+ 
+# Create a data frame for easier plotting
+plot_data <- data.frame(Fitted = fitted_values, Residuals = residuals)
+ 
+ggplot(plot_data, aes(x = Fitted, y = Residuals)) +
+  geom_point(color = "#0072B2", alpha = 0.7) +  # Adjust point color and transparency
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +  # Add horizontal line at y = 0
+  labs(title = "Residuals vs Fitted",
+       x = "Fitted values",
+       y = "Residuals") +  # Improve axis labels
+  theme_minimal() +  # Use a minimal theme for cleaner appearance
+  theme(axis.text = element_text(size = 12),        # Increase text size for better readability
+        axis.title = element_text(size = 14, face = "bold"))  # Adjust axis title size and style
+
+
+```
+
